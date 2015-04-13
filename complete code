@@ -1,0 +1,1040 @@
+#ifdef __cplusplus
+#include <cstdlib>
+#else
+#include <stdlib.h>
+#endif
+#include <string>
+#include <SDL/SDL.h>
+#include <iostream>
+#include<fstream>
+
+#include "SDL/SDL_image.h"
+#include "SDL/SDL_ttf.h"
+#include <sstream>
+#include <string>
+
+using namespace std;
+
+//Frames per second(to cap the frame rate)
+const int FRAMES_PER_SECOND = 60;
+
+//String stream for text
+std::stringstream BLOCKSMISSED;
+std::stringstream CHEATSLEFT;
+std::stringstream POPULATION;
+std::stringstream NUMBERBLOCKS;
+std::stringstream PREVIOUSHIGH;
+std::stringstream NEWHIGH;
+
+//Dimensions
+const int DOT_WIDTH = 96;
+const int DOT_HEIGHT = 96;
+//const int PEOPLE_WIDTH = 50;
+//const int PEOPLE_HEIGHT = 50;
+const int SCREEN_WIDTH = 1400;
+const int SCREEN_HEIGHT = 750;
+const int SCREEN_BPP = 32;
+
+   int counter=0;
+   int xcod=0;
+   bool first = true; bool ppl;
+   bool pl=false;
+   int cheatsleft=3;
+   bool moved=false;
+   bool firstBlock=true;
+   bool secondBlock=false;
+   int height;
+   int numBlocks=0;
+   int peoplePopulation=0;
+   int speed=20;
+   int speedMax=100;
+   //int health1=100;
+   int xClick=0;
+   int yClick=0;
+   char clickedButton='p';
+
+   SDL_Rect clip;
+   SDL_Rect clip2;
+   SDL_Rect health;
+
+//The surfaces
+SDL_Surface *square = NULL;
+SDL_Surface *people = NULL;
+SDL_Surface *screen = NULL;
+SDL_Surface *message = NULL;
+SDL_Surface *platform = NULL;
+SDL_Surface *background = NULL;
+SDL_Surface *squarecut = NULL;
+SDL_Surface *missedBlocks=NULL;
+SDL_Surface *numberblocks=NULL;
+SDL_Surface *population=NULL;
+SDL_Surface *HealthBar=NULL;  // denotes combo meter
+SDL_Surface *mainmenu = NULL;
+SDL_Surface *instruct = NULL;
+SDL_Surface *newHigh = NULL;
+SDL_Surface* cheatsLeft = NULL;
+SDL_Surface *previousHigh = NULL;
+SDL_Surface *messagePrompt = NULL;
+
+
+
+
+
+
+
+//TTF_RenderText_Shaded(font, "Humans killed: " + totalKilled,    foregroundColor, colorWhite);
+SDL_Color colorRed={212,60,60}, colorWhite={0xff,0xff,0xff};
+
+//The font that's going to be used
+//TTF_Font *font = NULL;
+
+
+
+//The event structure
+SDL_Event event;
+
+//The font
+TTF_Font *font = NULL;
+
+//The color of the font
+//SDL_Color textColor = { 0xEE, 0, 0 };
+
+
+class Dot
+{
+public:
+
+    //The X and Y offsets of the dot
+SDL_Rect dot;
+
+
+
+    //The velocity of the dot
+    int xVel, yVel;
+
+        int xBlock1, xBlock2;
+    //Initializes the variables
+    Dot();
+
+    //Takes key presses and adjusts the dot's velocity
+    void handle_input();
+
+    //Moves the dot
+    void move();
+    void reset();
+    bool checkCollision(float accuracy);
+
+    //Shows the dot on the screen
+    void show(SDL_Surface *sq);
+};
+class Button
+{
+    public:
+
+        //The attributes of the button
+    SDL_Rect box;
+
+    //Initialize the variables
+    Button( int x, int y, int w, int h );
+
+
+
+};
+
+//The timer
+class Timer
+{
+    private:
+    //The clock time when the timer started
+    int startTicks;
+
+    //The ticks stored when the timer was paused
+    int pausedTicks;
+
+    //The timer status
+    bool paused;
+    bool started;
+
+    public:
+    //Initializes variables
+    Timer();
+
+    //The various clock actions
+    void start();
+    void stop();
+    void pause();
+    void unpause();
+
+    //Gets the timer's time
+    int get_ticks();
+
+    //Checks the status of the timer
+    bool is_started();
+    bool is_paused();
+};
+
+SDL_Surface *load_image(string filename )
+{
+    //The image that's loaded
+    SDL_Surface* loadedImage = NULL;
+
+    //The optimized surface that will be used
+    SDL_Surface* optimizedImage = NULL;
+
+    //Load the image
+    loadedImage = IMG_Load( filename.c_str() );
+
+    //If the image loaded
+    if( loadedImage != NULL )
+    {
+        //Create an optimized surface
+        optimizedImage = SDL_DisplayFormat( loadedImage );
+
+        //Free the old surface
+        SDL_FreeSurface( loadedImage );
+
+
+                    //If the image was optimized just fine
+        if( optimizedImage != NULL )
+        {
+            //Map the color key
+            Uint32 colorkey = SDL_MapRGB( optimizedImage->format, 0xFF, 0xFF, 0xFF );
+
+            //Set all pixels of color R 0, G 0xFF, B 0xFF to be transparent
+            SDL_SetColorKey( optimizedImage, SDL_SRCCOLORKEY, colorkey );
+        }
+
+    }
+
+    //Return the optimized surface
+    return optimizedImage;
+}
+
+void apply_surface( int x, int y, SDL_Surface* source, SDL_Surface* destination, SDL_Rect* clip = NULL )
+{
+    //Holds offsets
+    SDL_Rect offset;
+
+    //Get offsets
+    offset.x = x;
+    offset.y = y;
+
+    //Blit
+    SDL_BlitSurface( source, clip, destination, &offset );
+}
+
+
+
+bool init()
+{
+    //Initialize all SDL subsystems
+    if( SDL_Init( SDL_INIT_EVERYTHING ) == -1 )
+    {
+        return false;
+    }
+
+
+    //Set up the screen
+    screen = SDL_SetVideoMode( SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP, SDL_SWSURFACE );
+
+    //If there was an error in setting up the screen
+    if( screen == NULL|| TTF_Init() == -1 )
+    {
+        return false;
+    }
+
+
+
+
+    //Set the window caption
+    SDL_WM_SetCaption( "City Blocks", NULL );
+
+    //If everything initialized fine
+    return true;
+}
+
+bool load_files()
+{
+    //Load the dot image
+    square = load_image( "square.bmp" );
+    squarecut = load_image( "squarecut.bmp" );;
+    platform = load_image( "platform.bmp" );
+    background = load_image( "scrollingsky.bmp" );
+    people = load_image( "people.bmp" );
+    HealthBar=load_image("combo.bmp");
+    mainmenu = load_image( "mainmenu.bmp" );
+    instruct= load_image( "instructions.bmp" );
+
+
+    clip.x=0;/////
+    clip.y=0;/////
+    clip.h=people->h;
+    clip.w=people->w;
+
+    clip2.x=0;
+    clip2.y=0;
+    clip2.h=30;
+    clip2.w=20;
+
+    health.x=0;
+    health.y=0;
+
+
+
+    height= screen->h-(squarecut->h+square->h);
+
+    if( square==NULL||people==NULL||background == NULL|| platform==NULL || squarecut==NULL|| mainmenu == NULL  )
+    {
+        return false;
+    }
+
+
+    //Open the font
+
+    font=TTF_OpenFont("lazy.ttf",30);
+
+
+    //If there was a problem in loading the dot
+    //If there was an error in loading the font
+    if( font == NULL )
+    {
+        return false;
+    }
+    //If everything loaded fine
+    return true;
+}
+
+void clean_up()
+{
+
+    //Free the surface
+     SDL_FreeSurface(square );
+     SDL_FreeSurface(people );
+     SDL_FreeSurface( background );
+     SDL_FreeSurface( message );
+     SDL_FreeSurface(platform);
+     SDL_FreeSurface(background);
+     SDL_FreeSurface(squarecut);
+     SDL_FreeSurface(missedBlocks);
+     SDL_FreeSurface(cheatsLeft);
+     SDL_FreeSurface(numberblocks);
+     SDL_FreeSurface(population);
+     SDL_FreeSurface(HealthBar);
+     SDL_FreeSurface( mainmenu );
+     SDL_FreeSurface( instruct );
+     SDL_FreeSurface( previousHigh );
+     SDL_FreeSurface( newHigh );
+     SDL_FreeSurface( messagePrompt );
+
+
+
+    TTF_CloseFont(font);
+
+    //Close the font
+    TTF_CloseFont( font );
+
+    //Quit SDL_ttf
+    TTF_Quit();
+
+
+
+    SDL_Quit();
+}
+
+
+
+Dot::Dot()
+{
+    //Initialize the offsets
+    dot.x = 850;
+    dot.y = 40;
+
+    //Initialize the velocity
+    xVel = speed;
+    yVel = 0;
+}
+void Dot::handle_input()
+{
+
+ if( event.type == SDL_KEYDOWN )
+    {
+        //Adjust the velocity
+        switch( event.key.keysym.sym )
+        {
+
+            case SDLK_SPACE:
+            if (xVel!=0)
+            {
+            xVel=0;
+            yVel =20;
+            } break;
+
+            case SDLK_DOWN :
+                if(speed>=20 && cheatsleft>0)
+                {   speed=speed/4;
+                    xVel=speed;
+                    cheatsleft--;
+                }
+           break;
+
+
+    }
+
+
+    // end switch
+}// end of message processing
+
+  }     // DRAWING STARTS HERE
+
+        // clear screen
+    //If a key was pressed
+
+void Dot::move()
+{
+    //Move the dot left or right
+   dot.x+= xVel;
+
+    //Flying people to dot
+   if(pl && xcod<xBlock1){
+  xcod+=10;
+   }
+   else{
+    xcod=0;
+    pl=false;
+   }
+    //If the dot went too far to the left or right
+    if( ( dot.x < 495 ) || ( dot.x + DOT_WIDTH > 1300 ) )
+    {
+        //move back
+
+        xVel = -xVel;
+    }
+
+    //If the dot went too far down
+    if( dot.y > height )
+    {
+        //move back
+        yVel=0;
+
+    }
+    else //Move the dot up or down
+    dot.y += yVel;
+}
+
+void Dot::reset(){
+
+    //Initialize the location of dot
+    dot.x =  850 ;
+    dot.y = 40;
+
+    //Initialize the velocity
+    xVel =speed;
+    yVel = 0;
+}
+
+bool Dot::checkCollision(float accuracy){
+if(abs(dot.x-xBlock1)<DOT_WIDTH*accuracy) return true;
+else return false;
+}
+
+void Dot::show(SDL_Surface *sq)
+{
+    //Show the dot
+    apply_surface( dot.x, dot.y, sq, screen );
+}
+Button::Button( int x, int y, int w, int h )
+{
+    //Set the button's attributes
+    box.x = x;
+    box.y = y;
+    box.w = w;
+    box.h = h;
+
+}
+
+void button_handle_events()
+{
+
+
+     //The mouse offsets
+    int x = 0, y = 0;
+    if( SDL_PollEvent( &event ) ){
+    //If a mouse button was pressed
+    if( event.type == SDL_MOUSEBUTTONDOWN )
+    {
+        //If the left mouse button was pressed
+        if( event.button.button == SDL_BUTTON_LEFT )
+        {
+            //Get the mouse offsets
+            xClick = event.button.x;
+            yClick = event.button.y;
+        }
+        }
+        }
+}
+
+Timer::Timer()
+{
+    //Initialize the variables
+    startTicks = 0;
+    pausedTicks = 0;
+    paused = false;
+    started = false;
+}
+
+void Timer::start()
+{
+    //Start the timer
+    started = true;
+
+    //Unpause the timer
+    paused = false;
+
+    //Get the current clock time
+    startTicks = SDL_GetTicks();
+}
+
+void Timer::stop()
+{
+    //Stop the timer
+    started = false;
+
+    //Unpause the timer
+    paused = false;
+}
+
+void Timer::pause()
+{
+    //If the timer is running and isn't already paused
+    if( ( started == true ) && ( paused == false ) )
+    {
+        //Pause the timer
+        paused = true;
+
+        //Calculate the paused ticks
+        pausedTicks = SDL_GetTicks() - startTicks;
+    }
+}
+
+void Timer::unpause()
+{
+    //If the timer is paused
+    if( paused == true )
+    {
+        //Unpause the timer
+        paused = false;
+
+        //Reset the starting ticks
+        startTicks = SDL_GetTicks() - pausedTicks;
+
+        //Reset the paused ticks
+        pausedTicks = 0;
+    }
+}
+
+int Timer::get_ticks()
+{
+    //If the timer is running
+    if( started == true )
+    {
+        //If the timer is paused
+        if( paused == true )
+        {
+            //Return the number of ticks when the timer was paused
+            return pausedTicks;
+        }
+        else
+        {
+            //Return the current time minus the start time
+            return SDL_GetTicks() - startTicks;
+        }
+    }
+
+    //If the timer isn't running
+    return 0;
+}
+
+bool Timer::is_started()
+{
+    return started;
+}
+
+bool Timer::is_paused()
+{
+    return paused;
+}
+
+
+
+
+int main ( int argc, char** argv )
+{
+int timer=0;
+bool quit = false;
+int k=0;
+bool checkScore = true;
+int finalScore=0;
+bool  instructions=true;
+bool scoredHigh=false;
+
+ //The offsets of the background
+    int bgX = 0, bgY = 750;
+
+//Keep track of the current frame
+    int frame = 0;
+
+    //Whether or not to cap the frame rate
+    bool cap = true;
+
+    //The frame rate regulator
+    Timer fps;
+
+
+
+
+   // Open file for reading
+    ifstream ifile("high.txt");
+    if(!ifile.is_open()) {
+        cerr << "Input file couldn't be opened." << endl;
+        return 0;
+    }
+
+    int highScore;
+    // cin >> score;
+    ifile >> highScore;
+
+
+
+
+
+    //The dot that will be used
+    Dot myDot;
+
+     //Initialize
+    if( init() == false )
+    {
+
+        return 1;
+    }
+
+
+     if( load_files() == false )
+    {
+
+        return 1;
+    }
+    atexit(SDL_Quit);
+
+Button play(459,320,331,80);
+Button howtoplay(459,430,331,61);
+Button exit(459,570,331,59);
+
+
+apply_surface( 0, 0, mainmenu, screen);
+    SDL_Flip(screen);
+
+while(clickedButton=='p'){
+button_handle_events();
+if( ( xClick > play.box.x ) && ( xClick < play.box.x + play.box.w ) && ( yClick > play.box.y ) && ( yClick < play.box.y + play.box.h ) )
+           {
+                clickedButton='a';
+            }
+else if ( ( xClick > howtoplay.box.x ) && ( xClick < howtoplay.box.x + howtoplay.box.w ) && ( yClick > howtoplay.box.y ) && ( yClick < howtoplay.box.y + howtoplay.box.h ) )
+           {
+                clickedButton='b';
+            }
+    else if ( ( xClick > exit.box.x ) && ( xClick < exit.box.x + exit.box.w ) && ( yClick > exit.box.y ) && ( yClick < exit.box.y + exit.box.h ) )
+           {
+                clickedButton='c';
+            }
+}
+
+switch(clickedButton){
+
+case 'c': quit=true; break;
+
+case 'b': apply_surface( 0, 0, instruct, screen);
+    SDL_Flip(screen);
+
+    while(instructions){
+    if( SDL_PollEvent( &event ) ){
+         if( event.type == SDL_KEYDOWN )
+      {
+        if( event.key.keysym.sym==SDLK_RETURN ) instructions=false;
+
+    }
+                                  }
+
+                       }
+
+case 'a':
+
+    //Render the text
+//    std::string caption_str = ("Blocks Missed: " + std::to_string(counter))
+//
+//message = TTF_RenderText_Shaded(font, caption_str.c_str(),    foregroundColor, colorWhite);
+
+//char buf[50];
+//sprintf(buf, "Blocks Missed: %d", counter);
+//message=TTF_RenderText_Solid(font, buf, colorWhite);
+
+
+
+    //If there was an error in rendering the text
+//    if( message == NULL )
+//    {
+//        return 1;
+//    }
+    // make sure SDL cleans up before exit
+
+
+
+//    // load an image
+//     SDL_Surface* skybg = SDL_LoadBMP("sky.bmp");
+//  SDL_Surface* plt = SDL_LoadBMP("platform.bmp");
+// SDL_Surface* sqcut = SDL_LoadBMP("squarecut.bmp");
+//     SDL_Surface* bmp = SDL_LoadBMP("square.bmp");
+//
+//
+//    if (!bmp)
+//    {
+//        p myDot.handle_input();rintf("Unable to load bitmap: %s\n", SDL_GetError());
+//        return 1;
+//    }
+
+//    // center the bitmap on screen
+//    SDL_Rect dstrect;
+//    dstrect.x = (screen->w - bmp->w) / 2;
+//    dstrect.y = (screen->h - bmp->h) / 2;
+//
+//SDL_Rect dstrect1;
+//    dstrect1.x = (screen->w - bmp->w) / 2;
+//    dstrect1.y = (screen->h - plt->w) / 2;
+
+    // program main loop
+
+
+//        // message processing loop
+//        SDL_FillRect(screen, 0, SDL_MapRGB(screen->format, 0, 0, 0));
+//
+//        // draw bitmap
+//        SDL_BlitSurface(skybg, 0, screen, &dstrect);
+//         SDL_BlitSurface(plt, 0, screen, &dstrect1);
+//
+//        SDL_BlitSurface(bmp, 0, screen, &dstrect);
+
+
+
+
+
+
+//
+//        // DRAWING ENDS HERE
+//
+//        // finally, update the screen :)
+//        SDL_Flip(screen);
+//    // free loaded bitmap
+//    SDL_FreeSudot.y + DOT_HEIGHT > SCREEN_HEIGHT-50rface(bmp);
+//
+//    // all is well ;)
+//    printf("Exited cleanly\n");
+
+
+
+    //While the user hasn't quit
+    while( quit == false )
+    {
+
+//Start the frame timer
+        fps.start();
+        //While there's events to handle
+        if( SDL_PollEvent( &event ) )
+        {
+            //Handle events for the dot
+            //myDot.handle_input();
+
+            //If the user has Xed out the window
+            if( event.type == SDL_QUIT )
+            {
+
+                //Quit the program
+                quit = true;
+            }
+
+
+            //If a key was pressed
+//            else if( event.type == SDL_KEYDOWN )
+//            {
+//                //If enter was pressed
+//                if( event.key.keysym.sym == SDLK_RETURN )
+//                {
+//                    //Turn frame rate regulator on/off
+//                    cap = ( !cap );
+//                }
+//            }
+
+             myDot.handle_input();
+
+        }
+
+
+        //Move the dot
+        myDot.move();
+
+
+
+//        if( SDL_Flip( screen ) == -1 )
+//        {
+//            return 1;
+//        }
+//textSurface=TTF_RenderText_Shaded(font, "Blocks Missed: " + counter,    textColor , colorWhite);
+//apply_surface( 0, 500, textSurface, screen );
+
+        //Fill the screen white
+        //SDL_FillRect( screen, &screen->clip_rect, SDL_MapRGB( screen->format, 0xFF, 0xFF, 0xFF ) );
+        //update score
+//        SCORE.str("");
+//        SCORE.clear();
+//        SCORE<<"Blocks Missed: "<<counter;
+//        Score=TTF_RenderText_Solid(font,SCORE.str().c_str(),textColor);
+        //Show the dot on the screen
+         //apply_surface(0,0,Score,background);
+
+
+                //Show the background
+        apply_surface( bgX, bgY, background, screen );
+        apply_surface( bgX, bgY- background->h, background, screen );
+
+        if(!secondBlock)apply_surface( 0, (screen->h - platform->h), platform, screen );
+
+        if( !(myDot.dot.y > height ) ){
+        myDot.show(square);
+        }
+        else {
+
+
+
+ if(firstBlock){
+                    //Code for the first block
+if (first||myDot.checkCollision(.70) ){
+
+    myDot.xBlock1 = myDot.dot.x ;
+    myDot.reset();
+                first=false;
+                height=screen->h-squarecut->h-2*square->h+4;
+                k++;
+                numBlocks++;
+                firstBlock=false;
+                 //Scroll background
+
+                }
+                }
+
+                else{
+
+
+                    if (myDot.checkCollision(.70) ){     //falls inside
+
+                         {
+                             for(int i=100; i>abs(myDot.dot.x-myDot.xBlock1);i--)
+                            {
+                            if(clip2.w>30)peoplePopulation+=2;
+                            else peoplePopulation++;
+                            }
+
+                          }
+                          if(speed<speedMax-7)speed=speed+8;
+                          else speed=speedMax;
+
+            if (myDot.checkCollision(.10) ){
+              clip2.w=HealthBar->w;
+                            }
+                            pl=true;
+                             //Scroll background
+        bgY += 80;
+
+
+numBlocks++;
+SDL_Delay(500);
+
+        int xCoord1=myDot.dot.x;
+
+ppl=true;
+    myDot.xBlock2=myDot.xBlock1;
+    secondBlock=true;
+    myDot.xBlock1 = myDot.dot.x ;
+
+         myDot.reset();
+
+    first=false;
+                }
+
+                else {                                                         //falls outside
+                    //Initialize the offsets
+
+                    messagePrompt=TTF_RenderText_Solid(font,"BLOCK MISSED",colorRed);
+
+        apply_surface((SCREEN_WIDTH-messagePrompt->w)/2,(SCREEN_HEIGHT-messagePrompt->h)/2,messagePrompt,screen);
+                //Update the screen
+        if( SDL_Flip( screen ) == -1 )
+        {
+            return 1;
+        }
+    SDL_Delay(1000);
+    SDL_FreeSurface(messagePrompt);
+
+                    counter++;
+                    if(speed>=20)speed=speed-10;
+                    myDot.reset();
+                }
+                }
+        }
+
+ //If the background has gone too far
+        if( bgY >= background->h )
+        {
+            //Reset the offset
+            bgY = 750;
+        }
+
+if(clip2.w>30){
+       clip2.w-=4;
+                }
+
+        if(!firstBlock)
+        {
+            apply_surface( myDot.xBlock1, (screen->h - squarecut->h)-square->h, square, screen );
+            if(secondBlock)apply_surface( myDot.xBlock2, (screen->h - squarecut->h), squarecut, screen );
+        }
+
+
+
+        BLOCKSMISSED.str("");
+        BLOCKSMISSED.clear();
+        BLOCKSMISSED<<"Blocks Missed: "<<counter;
+        missedBlocks=TTF_RenderText_Solid(font,BLOCKSMISSED.str().c_str(),colorWhite);
+
+        CHEATSLEFT.str("");
+        CHEATSLEFT.clear();
+        CHEATSLEFT<<"Cheats Left: "<<cheatsleft;
+        cheatsLeft=TTF_RenderText_Solid(font,CHEATSLEFT.str().c_str(),colorWhite);
+
+        POPULATION.str("");
+        POPULATION.clear();
+        POPULATION<<"Population: "<<peoplePopulation;
+        population=TTF_RenderText_Solid(font,POPULATION.str().c_str(),colorWhite);
+
+        NUMBERBLOCKS.str("");
+        NUMBERBLOCKS.clear();
+        NUMBERBLOCKS<<"Tower Height: "<<numBlocks;
+        numberblocks=TTF_RenderText_Solid(font,NUMBERBLOCKS.str().c_str(),colorWhite);
+
+        PREVIOUSHIGH.str("");
+        PREVIOUSHIGH.clear();
+        PREVIOUSHIGH<<"Highest Population: "<<highScore;
+        previousHigh=TTF_RenderText_Solid(font,PREVIOUSHIGH.str().c_str(),colorWhite);
+
+        NEWHIGH.str("");
+        NEWHIGH.clear();
+        NEWHIGH<<"CONGRATS!! New Highest Population: "<<peoplePopulation;
+        newHigh=TTF_RenderText_Solid(font,NEWHIGH.str().c_str(),colorWhite);
+
+
+        apply_surface(40,200,population,screen);
+        apply_surface(40,300,numberblocks,screen);
+        apply_surface(40,400,cheatsLeft,screen);
+        apply_surface(40,500,missedBlocks,screen);
+        apply_surface(40,100,previousHigh,screen);
+
+
+        if(pl) apply_surface( xcod, (screen->h - squarecut->h)-0.8*DOT_HEIGHT, people, screen,&clip );
+
+         apply_surface( (screen->w- HealthBar->w)/2 , 5, HealthBar, screen, &clip2 );
+
+        if (counter==3){
+
+          finalScore = peoplePopulation;
+            quit=true;
+        }
+
+
+   if(checkScore&& highScore<finalScore) {
+
+        // Open file for writing
+    ofstream ofile("high.txt");
+    if(!ifile.is_open()) {
+        cerr << "File Ouput Stream failed to open/create file." << endl;
+        return 0;
+    }
+
+        // cout << str << endl;
+        ofile << finalScore << endl;
+        checkScore=false;
+        scoredHigh=true;
+
+
+        // Check if the ouput was successful or not.
+        // good() checks the error flags and if they are
+        // set, it returns false, otherwise true.
+        // You can also check ifile.good() to check if the
+        // input was successful.
+        if(!ofile.good()) {
+            cerr << "Error occured, while writing to output file" << endl;
+            return 0;
+        }
+
+         ifile.close();
+    ofile.close();
+
+        // Clear the error flags
+        //ofile.clear();
+    }
+
+
+
+                //Update the screen
+        if( SDL_Flip( screen ) == -1 )
+        {
+            return 1;
+        }
+
+         //Increment the frame counter
+        frame++;
+
+        //If we want to cap the frame rate
+        if( ( cap == true ) && ( fps.get_ticks() < 1000 / FRAMES_PER_SECOND ) )
+        {
+            //Sleep the remaining frame time
+            SDL_Delay( ( 1000 / FRAMES_PER_SECOND ) - fps.get_ticks() );
+        }
+
+   //apply_surface( 0, 150, message, screen );
+
+
+    }
+    if(quit==true)
+    {
+        if(scoredHigh){
+             newHigh=TTF_RenderText_Solid(font,NEWHIGH.str().c_str(),colorRed);
+             apply_surface((SCREEN_WIDTH-newHigh->w)/2,(SCREEN_HEIGHT-newHigh->h)/2-100,newHigh,screen);
+        }
+        message=TTF_RenderText_Solid(font,"GAME OVER",colorWhite);
+        apply_surface((SCREEN_WIDTH-message->w)/2,(SCREEN_HEIGHT-message->h)/2+100,message,screen);
+                //Update the screen
+        if( SDL_Flip( screen ) == -1 )
+        {
+            return 1;
+        }
+SDL_Delay(2000);
+
+    }
+
+    //Clean up
+    clean_up();
+
+
+    return 0;
+
+}
+    }
+
