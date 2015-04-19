@@ -1,0 +1,191 @@
+
+#include "gameInclusions/headers.h"
+#include "gameInclusions/globals.h"
+#include "gameInclusions/constants.h"
+#include "gameInclusions/prototypes.h"
+#include "gameInclusions/block.h"
+#include "gameInclusions/FileIO.h"
+#include "CBloxxAPI.h"
+
+
+int main ( int argc, char** argv )
+{
+
+//The frame rate regulator
+    Timer fps;
+
+//Get previous high score
+    getHighScore();
+
+//The dot that will be used
+    Dot myDot;
+
+    //Initialize
+    if( init() == false )  return 1;
+    //Load files
+    if( load_files() == false ) return 1;
+
+    apply_surface( 0, 0, mainmenu, screen);
+    //Update the screen
+    SDL_Flip( screen );
+
+//Wait for player to select a button and respond accordingly
+    checkClick();
+
+    //While the user hasn't quit
+    while( quit == false )
+    {
+        //Start the frame timer
+        fps.start();
+        //While there's events to handle
+        if( SDL_PollEvent( &event ) )
+        {
+            //If the user has exited out the window
+            if( event.type == SDL_QUIT )
+            {
+                //Quit the program
+                quit = true;
+            }
+
+            //Handles spacebar or downkey press
+            myDot.handle_input();
+        }
+
+        //Move the dot
+        myDot.move();
+
+//Applies scrolling background
+        applyBackground();
+
+//Platform displayed only before the fall of third block
+        if(!thirdBlock)apply_surface( 0, (screen->h - platform->h), platform, screen );
+
+//Block falls until a certain height
+        if( !(myDot.dot.y > height ) )
+        {
+            myDot.show(square);
+        }
+        else
+        {
+
+
+            if(firstBlock)
+            {
+                //Code for the first block
+                myDot.xTop = myDot.dot.x ;
+                myDot.reset();
+
+                //Changes the height of fall since now 2 blocks being displayed on screen
+                height=screen->h-squarecut->h-2*square->h+4;
+
+                numBlocks++;
+                firstBlock=false;
+                myDot.speedIncrease();
+
+            }
+
+            //If it is second block
+            else
+            {
+
+                //falls inside
+                if (myDot.checkCollision(.70))
+                {
+                    myDot.increaseScore();
+                    myDot.speedIncrease();
+
+                    if (myDot.checkCollision(.10) )
+                    {
+                        refillCombo();
+                    }
+
+                    //Show the moving people to fly in
+                    showPeople=true;
+                    thirdBlock=true;
+
+                    scrollBackground();
+                    numBlocks++;
+                    SDL_Delay(500);
+
+                    //Store old coordinates so that 3 blocks appear on screen at time
+                    myDot.xBottom=myDot.xTop;
+                    myDot.xTop = myDot.dot.x ;
+                    myDot.reset();
+
+
+                }
+
+                //falls outside
+                else
+                {
+
+                    //Message on screen that player missed
+                    messagePrompt=TTF_RenderText_Solid(font,"BLOCK MISSED",colorRed);
+                    apply_surface((SCREEN_WIDTH-messagePrompt->w)/2,(SCREEN_HEIGHT-messagePrompt->h)/2,messagePrompt,screen);
+
+                    //Update the screen
+                    SDL_Flip( screen );
+                    SDL_Delay(300);
+                    SDL_FreeSurface(messagePrompt);
+
+                    blocksMissed++;
+                    myDot.reset();
+                    myDot.speedDecrease();
+
+                }
+            }
+
+        }
+
+        checkBackground();
+
+        //Shows the 2 blocks at bottom
+        if(!firstBlock)
+        {
+            apply_surface( myDot.xTop, (screen->h - squarecut->h)-square->h, square, screen );
+            if(thirdBlock)apply_surface( myDot.xBottom, (screen->h - squarecut->h), squarecut, screen );
+        }
+
+        decreaseCombo();
+        displayCombo();
+        DisplaySideTexts();
+
+        if(showPeople) apply_surface( xpeople, (screen->h - squarecut->h)-0.8*DOT_HEIGHT, people, screen,&movingPeople );
+
+//Checks whether the player has missed 3 blocks
+        if (blocksMissed==3)
+        {
+            finalScore = peoplePopulation;
+            quit=true;
+        }
+
+        //Update the screen
+        SDL_Flip( screen );
+
+//If we want to cap the frame rate
+        if ( fps.get_ticks() < 1000 / FRAMES_PER_SECOND )
+        {
+            //Sleep the remaining frame time
+            SDL_Delay( ( 1000 / FRAMES_PER_SECOND ) - fps.get_ticks() );
+        }
+
+    }
+
+//When user quits or game is over
+    if(quit==true)
+    {
+        checkHighScore();
+        DisplayFinalTexts();
+
+        //Update the screen
+        SDL_Flip( screen );
+
+        SDL_Delay(2000);
+    }
+
+//Cleans up
+    clean_up();
+    return 0;
+
+}
+
